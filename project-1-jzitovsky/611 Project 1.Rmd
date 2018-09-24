@@ -1,0 +1,213 @@
+---
+  title: "BIOS 611 Project 1"
+  author: "Josh Zitovsky 730275298"
+  date: "`r format(Sys.time(), '%m/%d/%Y')`"
+  output: html_document
+---
+
+<style>
+    body .main-container {
+        max-width: 1150px;
+    }
+</style>
+
+```{r, message=F}
+#NOTE: Install the following packages before running this script: MASS, ggplot2, tidyverse, lmtest, nortest
+
+
+#loading required packages to run this script
+library(MASS)
+library(ggplot2)
+library(tidyverse)
+library(lmtest)
+library(nortest)
+```
+
+
+```{r}
+#This data set gives crime statistics and urban proportions for every state in 1975. 
+#I wish to investigate whether states with greater Urban Populations had more murders (per capita) in 1975.
+data(USArrests)
+crime = as.tibble(USArrests) 
+
+#making the state a column/variable in the tibble (as opposed to just the row name)
+crime = mutate(crime, state=rownames(crime)) 
+
+#Getting the spearman's correlation between Murder and UrbanPop, as well as its associated p-value 
+test=cor.test(crime$Murder,crime$UrbanPop, method="spearman", exact=F)
+corEstimate = round(test$estimate, 2) 
+corPValue = round(test$p.value, 2) 
+```
+
+```{r, echo=F, eval=F}
+#We are using Spearman's correlation and smoothed lines (as opposed to Pearson's correlation and linear regression) due to the non-normality and heterogeneous variance of the data. Non-normality and heteroskedacity was determined from the code below (code and output not shown in blog)
+line=lm(data=crime, Murder ~ UrbanPop)
+ad.test(resid(line))
+bptest(line)
+qqnorm(resid(line))
+qqline(resid(line))
+```
+
+```{r, message=F}
+#plotting a scatterplot of Murder vs. UrbanPop, with a data-fitted smoothed line and spearman's correlation information included
+ggplot(data=crime, mapping=aes(y=Murder, x=UrbanPop)) +
+  geom_point() + 
+  geom_smooth(se=F,color="red") +
+  annotate('text', label=paste("Spearman's Rho: " , corEstimate, "\nP-value: ", corPValue), x=80,y=17, color="red") 
+```
+
+```{r}
+#Printing information for the states with the smallest UrbanProp values
+crime %>% 
+  filter(rank(UrbanPop,ties.method="min")<=5) %>% 
+  select(Murder, UrbanPop, state) %>% 
+  arrange(UrbanPop) 
+```
+
+```{r}
+#Printing information for the states with the largest UrbanProp values
+crime %>% 
+  filter(rank(desc(UrbanPop),ties.method="min")<=5) %>% 
+  select(Murder, UrbanPop, state) %>% 
+  arrange(desc(UrbanPop)) 
+```
+
+This figure was derived from the "USArrests" data set, which is derived from "World Almanac and Book of Facts 1975". The data set contains murder, arrest, and rape arrests per 100,000 residents for each state in 1975, as well as the proportion of the population living in urban areas. As it is often said that higher crime rates are in urban areas, one would think there would be a relationship between state-wide murder rates and state-wide urban population proportions. However, it does not appear that that there is any relationship between state urban population proportion and state murder rate, as the scatterplot points show no clear pattern, the smoothed line remains mostly flat and a spearman's correlation test gives a p-value of 0.46. The states with the highest urban population proportions are CA, NJ, RI, NY and MA, with murder rates varying from 3.4 (Rhode Island) to 11.1 (New York). The states with the lowest urban population proportions are VT, WV, MS, ND, NC and SD, with murder rates varying from 0.8 (North Dakota) to 16.1 (Mississippi). 
+
+As a next step, it would be interesting to look at the relationships between urban population proportions and other crimes (such as assault), as well as relationships between rates of different crimes. Looking at other data sets that collect crime rates for different years (particularly more recent years) would also be worthwhile. 
+
+(For non-statisticians) The points in the plot above plot UrbanPop and Murder values for each state. The red line illistrates the relationship, or trend, between Murder and UrbanPop. Spearman's Rho is a measure of the association between the two variables, and the p-value is a way of determining whether the association is statistically significant (greater than what would occur by chance). A p-value < 0.05 is significant, and thus a p-value of 0.46 means that the association is not significant. 
+      
+
+```{r}
+#This data set gives finger length and height measurements for 3000 British criminals. 
+#I wish to investigate whether there is a relationship between finger length and body height
+data(crimtab)
+measure = as.tibble(crimtab) #this is a tibble of frequencies
+#head(measure) 
+
+#turning the frequency table 'measure' into a tibble of numeric-type observations, with one observation per frequency
+measure2 = tibble(Var1 = rep(measure$Var1, measure$n), Var2 = rep(measure$Var2, measure$n)) 
+measure2 = mutate(measure2, fingerlength=as.numeric(Var1), height=as.numeric(Var2)) 
+```
+  
+```{r}
+#Printing slope estimates and p-values for a linear regression of height vs. fingerlength
+line=lm(data=measure2, height~fingerlength)
+summary(line)
+```
+
+```{r, out.width='40%', out.height='40%'}
+#The below code checks that the assumptions of linear regression are not violated
+residuals=resid(line)
+ad.test(residuals) #normality test for the residuals
+bptest(line) #equal variance test for the residuals
+
+#studentized residual plot to check linearity and other assumptions
+ggplot(mapping=aes(y=studres(line), x=predict(line))) + 
+  geom_count() + 
+  geom_smooth(color="red")  
+```
+
+```{r}
+#Graphing regression line over scatterplot of the data
+ggplot(data=measure2, mapping=aes(y=height, x=fingerlength)) +
+  geom_count() + #scatterplot with size aesthetic mapped to frequency
+  geom_smooth(method="lm", se=F)  + #linear regression line
+guides(size=guide_legend(title="Count")) #changing legend title to improve readability
+```
+
+This figure above derived from the "crimtab" data set. The data was first collected by the Central Metric Office in New Scotland Yard at some time near year 1900, and contains finger lengths and body heights for 3000 criminals from England and Wales. There was clearly a strong positive, linear relationship between an inmate's finger length and their height, with finger length alone being able to predict 43% of the variation in height. On average, every increase in finger length was associated with a 7.8 increase in body height (in cm). All assumptions of linear regression were passed, supporting the validity of these estimations and inferences. 
+
+As a next step, it would be interesting to see with what accuracy finger length could predict height (in order words, what is the average prediction interval). It would also be interesting to investigate whether other parts of the body are better or worse at predicting height than finger length, such as foot size (though this would require additional data than is in "crimtab"). 
+
+
+
+
+
+
+
+
+
+```{r}
+#This data set gives various demographic information of 437 midwestern conties. 
+#I wish to explore the univariate distribution of percentage below poverty among these counties. 
+data(midwest)
+dem = as.tibble(midwest)
+
+#finding the states included in the data set
+unique(dem$state)
+
+#ouputting summary statistics for percentage below poverty
+summary(dem$percbelowpoverty)
+
+#plotting boxplot of percentage below poverty, together with  points for all of the values
+ggplot(data=dem, mapping=aes(x="", y=percbelowpoverty)) + 
+  geom_boxplot(fill="red") + #boxplot of variable
+  geom_jitter(alpha=0.2, width=0.5, color="blue") +
+  labs(x=NULL) 
+
+#printing selected variables for counties with outlyingly large poverty levels (>q3+1.5*IQR)
+dem %>% 
+  filter(percbelowpoverty>quantile(percbelowpoverty, .75)+1.5*IQR(percbelowpoverty)) %>% 
+  select(county, state, percbelowpoverty, percblack) %>%
+  arrange(desc(percbelowpoverty))
+
+#printing selected variables for counties with the smallest poverty levels
+dem %>% 
+  filter(rank(percbelowpoverty,ties.method="min")<=15) %>% 
+  select(county, state, percbelowpoverty, percblack) %>%
+  arrange(percbelowpoverty)
+```
+
+This figure was derived from the "midwest" data set, which recorded below povery levels (among various other demographic variables) for 437 midwestern counties. The counties come from Illinois, Indiana, Minnesota, Ohio and Wisconsin. The median povery level for these counties is 11.8%, with an interquartile range of 5.9% (9.19%-15.13%). It is worth noting that the mean poverty level is 12.5%, a value quite close to the national poverty level of 12.7% (see: https://poverty.ucdavis.edu/faq/what-current-poverty-rate-united-states). The Menominee county of Wisconsin is an extreme outlier among all the other counties, with a povery rate of almost 50%. Conversely, the Ozaukee county of Wisconsin has the lowest poverty rate of 2.18%. 
+
+As a next step, it would be interesting to look at assocations between poverty levels and some of the other recorded demographic variables, such as minority presense. For example, among the 15 counties with the lowest poverty rates, all had black percentages of less than 2%. However, among the 15 counties that were outliers (because of their high povery rates), over half had black percentages over 2%, with a couple having black percntages of over 30%! 
+
+(For non-statisticians) The red and black figure in the graph above is called a boxplot: the line in the middle is the average value, the section in red is where the middle 50% of the data is in (the "average" range of values so to speak), and black points that are above the wiskers are considered outliers. Boxplots are a good way of visualizing paticular distributions, particularly with regard to the average values and variation in those values. 
+
+
+
+
+
+
+
+
+
+```{r}
+#The data set gives a time series for presidental approval ratings  between 1945 and 1975, by quarter
+#I wish to explore the distribution of approval and investigate changes and trends across time 
+data(presidents)
+pres=as.tibble(presidents) 
+
+#changing column name 
+colnames(pres)="approval" 
+
+#creating a variable representing the time for each observation, in year scale 
+pres = mutate(pres, time=as.numeric(rownames(pres))) 
+pres = mutate(pres, time=(time-1)/4+1945)
+
+#removing missing values
+pres = filter(pres, !(is.na(approval))) 
+
+#getting quartiles of approval
+pres %>% summarize(q1=quantile(approval, 0.25), median=median(approval), q3=quantile(approval, 0.75))
+
+#plotting time series 
+ggplot(data=pres, mapping=aes(x=time, y=approval)) + 
+  geom_point(na.rm=T) + #plotting time series points
+  geom_smooth(span=0.3, se=F, color="red", na.rm=T) + #adding smooth line to illistrate trends
+  scale_x_continuous(breaks=c(seq(1945,1975)), minor_breaks=c(seq(1945, 1975))) + #adding tick marks for every year
+  scale_y_continuous() + #specifying that the time series object (approval) is continuous
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) #making x-axis tick mark labels vertical so they don't overlap with each other
+
+#printing observations demonstrating large positive and negative shifts in approval over time
+options(pillar.sigfig=6) #prevents decimals from being cut-off
+pres %>% filter(time %in% c(1945.25, 1951.75, 1955.5, 1963, 1967.5, 1970, 1974.75))
+```
+
+This figure was derived from the "presidents" data set, which is derived from The Gallup Organization. The data set contains quartly approval ratings of sitting US presidents from the first quarter of 1945 to the last quarter of 1974. Between that time, approval ratings averaged at 59% (median), with an interquartile range of 23% (46% - 69%). This is a large range, and the time series plot indeed indicates substantial variation in approval accross time. The data points and the smoothed line indicates several upward and downward trends in presidential approval throughout this time period, and it appears that the most substantial was between 1945 and 1952 (where approval declined from 87% to 23%), 1952 and 1956 (where approval rose from 23% to 79%), 1963 to 1967 (where approval sank from 79% to 38%) and 1970 to 1975 (where approval sank from 66% to 24%). These shifts are most likely not random, as they correspond prefectly to events such as the Korean war, major changes in the job market, the Vietnam war and watergate. 
+
+As a next step, it would be interesting to investigate the factors most important for explaining variation in approval. For example, are foreign and domestic policy equally likely to affect approval? 
+
+
